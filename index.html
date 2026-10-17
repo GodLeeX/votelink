@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1218">
+<meta name="format-detection" content="telephone=no">
+<title>VoteLink 投票</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: #0f1218;
+    color: #e8ecf5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    -webkit-text-size-adjust: 100%;
+  }
+  .card {
+    width: 100%;
+    max-width: 620px;
+    background: #171b24;
+    border: 1px solid #232a38;
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.45);
+  }
+  .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .badge {
+    font-size: 12px; letter-spacing: .08em; color: #7fa5ff;
+    background: rgba(79,140,255,.12); border: 1px solid rgba(79,140,255,.35);
+    padding: 4px 10px; border-radius: 999px;
+  }
+  .status { font-size: 12px; color: #8a93a6; display: flex; align-items: center; gap: 6px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #8a93a6; }
+  .dot.ok { background: #35d07f; box-shadow: 0 0 8px rgba(53,208,127,.7); }
+  .dot.bad { background: #f05a5a; }
+  h1 { font-size: 21px; line-height: 1.45; margin: 0 0 8px; font-weight: 600; }
+  .sub { color: #8a93a6; font-size: 13px; margin-bottom: 18px; }
+
+  .opt {
+    position: relative;
+    border: 1px solid #2a3345;
+    background: #1b2130;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color .15s, transform .08s;
+    user-select: none;
+    min-height: 56px;
+  }
+  .opt:active { transform: scale(.985); border-color: #4f8cff; }
+  .opt .bar {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+    background: rgba(79,140,255,.18);
+    transition: width .45s cubic-bezier(.2,.8,.2,1);
+  }
+  .opt .row { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .opt .t { font-size: 16px; }
+  .opt .c { font-variant-numeric: tabular-nums; color: #9fb4d8; font-weight: 600; font-size: 13px; white-space: nowrap; }
+  .opt .track { position: relative; height: 5px; background: #10141c; border-radius: 3px; margin-top: 12px; overflow: hidden; }
+  .opt .fill { height: 100%; width: 0; background: linear-gradient(90deg,#4f8cff,#6eb4ff); border-radius: 3px; transition: width .45s cubic-bezier(.2,.8,.2,1); }
+
+  .msg { color: #35d07f; font-size: 13px; margin-top: 12px; min-height: 18px; }
+  .msg.err { color: #f05a5a; }
+  .foot { color: #5c6577; font-size: 12px; margin-top: 18px; text-align: center; line-height: 1.6; }
+
+  .join { margin-top: 20px; }
+  .join input {
+    width: 100%; padding: 14px; font-size: 16px; letter-spacing: .18em; text-align: center;
+    color: #e8ecf5; background: #12161f; border: 1px solid #2a3345; border-radius: 12px;
+    text-transform: uppercase; outline: none;
+  }
+  .join input:focus { border-color: #4f8cff; }
+  .join button {
+    width: 100%; margin-top: 10px; padding: 14px; font-size: 15px; font-weight: 600;
+    color: #fff; background: #4f8cff; border: 0; border-radius: 12px; cursor: pointer;
+  }
+  .join button:active { background: #3f7ae6; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="top">
+    <span class="badge">VOTELINK</span>
+    <span class="status"><span class="dot bad" id="dot"></span><span id="statusText">未连接</span></span>
+  </div>
+
+  <h1 id="q">正在连接投票…</h1>
+  <div class="sub" id="meta"></div>
+
+  <div id="opts"></div>
+  <div class="msg" id="msg"></div>
+
+  <div class="join" id="joinBox">
+    <input id="roomInput" maxlength="6" placeholder="输入 6 位房间码" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <button id="joinBtn">进入投票</button>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- 基础配置 ---------- */
+  var BROKER_WS = 'wss://broker.emqx.io:8084/mqtt';
+  var STORE_ROOM = 'votelink.room';
+  var STORE_ID = 'votelink.device';
+
+  var params = new URLSearchParams(location.search);
+  var room = (params.get('room') || localStorage.getItem(STORE_ROOM) || '').toUpperCase();
+  var relayMode = !!room;
+
+  var deviceId = localStorage.getItem(STORE_ID);
+  if (!deviceId) {
+    deviceId = 'web-' + Math.random().toString(36).slice(2, 8);
+    localStorage.setItem(STORE_ID, deviceId);
+  }
+
+  var lastTotal = 0;
+  var lastCounts = [];
+  var lastSig = '';
+  var els = {
+    q: document.getElementById('q'),
+    meta: document.getElementById('meta'),
+    opts: document.getElementById('opts'),
+    msg: document.getElementById('msg'),
+    dot: document.getElementById('dot'),
+    statusText: document.getElementById('statusText'),
+    joinBox: document.getElementById('joinBox'),
+    roomInput: document.getElementById('roomInput'),
+    joinBtn: document.getElementById('joinBtn'),
+    foot: document.getElementById('foot')
+  };
+
+  /* ---------- 界面 ---------- */
+  function setStatus(text, kind) {
+    els.statusText.textContent = text;
+    els.dot.className = 'dot' + (kind ? ' ' + kind : '');
+  }
+
+  function say(text, isErr) {
+    els.msg.textContent = text || '';
+    els.msg.className = 'msg' + (isErr ? ' err' : '');
+  }
+
+  function render(s) {
+    if (!s || !s.options) return;
+    var total = s.total || 0;
+    els.q.textContent = s.question || '请选择一个选项';
+    els.meta.textContent = '总票数 ' + total + ' · 投票人数 ' + (s.voters || 0);
+
+    var sig = s.options.map(function (o) { return o.text; }).join('|');
+    if (sig !== lastSig) {
+      lastSig = sig;
+      els.opts.innerHTML = '';
+      s.options.forEach(function (o) {
+        var d = document.createElement('div');
+        d.className = 'opt';
+        d.setAttribute('data-index', o.index);
+
+        var bar = document.createElement('div'); bar.className = 'bar';
+        var row = document.createElement('div'); row.className = 'row';
+        var t = document.createElement('span'); t.className = 't'; t.textContent = o.text;
+        var c = document.createElement('span'); c.className = 'c'; c.textContent = '0 票';
+        row.appendChild(t); row.appendChild(c);
+
+        var track = document.createElement('div'); track.className = 'track';
+        var fill = document.createElement('div'); fill.className = 'fill';
+        track.appendChild(fill);
+
+        d.appendChild(bar); d.appendChild(row); d.appendChild(track);
+        d.addEventListener('click', function () { vote(o.index); });
+        els.opts.appendChild(d);
+      });
+    }
+
+    applyCounts(s.options, total);
+  }
+
+  function applyCounts(options, total) {
+    var nodes = els.opts.children;
+    lastCounts = [];
+    for (var i = 0; i < options.length; i++) {
+      var o = options[i];
+      lastCounts.push(o.count || 0);
+      var el = nodes[i];
+      if (!el) continue;
+      var pct = total > 0 ? Math.round(100 * o.count / total) : 0;
+      el.querySelector('.bar').style.width = pct + '%';
+      el.querySelector('.fill').style.width = pct + '%';
+      el.querySelector('.c').textContent = o.count + ' 票 · ' + pct + '%';
+    }
+    lastTotal = total;
+  }
+
+  function optimistic(index) {
+    var total = lastTotal + 1;
+    var nodes = els.opts.children;
+    for (var i = 0; i < nodes.length; i++) {
+      var c = lastCounts[i] || 0;
+      if (i === index) c++;
+      var pct = total > 0 ? Math.round(100 * c / total) : 0;
+      nodes[i].querySelector('.bar').style.width = pct + '%';
+      nodes[i].querySelector('.fill').style.width = pct + '%';
+      nodes[i].querySelector('.c').textContent = c + ' 票 · ' + pct + '%';
+    }
+    if (lastCounts[index] !== undefined) lastCounts[index]++;
+    lastTotal = total;
+    els.meta.textContent = '总票数 ' + total + ' · 投票人数 —';
+  }
+
+  /* ---------- 投票 ---------- */
+  function vote(index) {
+    if (!els.opts.children.length) { say('还没有连上投票，请稍候', true); return; }
+    optimistic(index);
+    say('正在提交…');
+
+    if (relayMode) {
+      var ok = mqtt.publish('votelink/' + room + '/vote',
+        JSON.stringify({ option: index, name: deviceId }));
+      say(ok ? '已提交' : '提交失败：连接已断开', !ok);
+    } else {
+      fetch('api/vote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ option: index, name: deviceId })
+      }).then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j.ok) { say(j.message || '已提交'); if (j.state) render(j.state); }
+          else say('提交失败：' + (j.error || ''), true);
+        })
+        .catch(function () { say('提交失败，请检查网络', true); });
+    }
+  }
+
+  /* ---------- 极简 MQTT over WebSocket（QoS 0） ---------- */
+  var mqtt = (function () {
+    var ws = null, connected = false, pid = 20, topic = '', backoff = 2000, timer = null, pingTimer = null;
+
+    function lenBytes(n) {
+      var out = [];
+      do { var d = n % 128; n = Math.floor(n / 128); if (n > 0) d |= 128; out.push(d); } while (n > 0);
+      return out;
+    }
+    function strBytes(s) {
+      var b = new TextEncoder().encode(s);
+      return [b.length >> 8, b.length & 255].concat(Array.from(b));
+    }
+    function send(type, body) {
+      if (!ws || ws.readyState !== 1) return false;
+      var head = [type].concat(lenBytes(body.length));
+      var buf = new Uint8Array(head.length + body.length);
+      buf.set(head, 0);
+      buf.set(body, head.length);
+      ws.send(buf);
+      return true;
+    }
+
+    function connect() {
+      try { ws = new WebSocket(BROKER_WS, ['mqtt']); } catch (e) { retry(); return; }
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = function () {
+        var cid = 'votelink-web-' + Math.random().toString(36).slice(2, 10);
+        send(0x10, strBytes('MQTT').concat([4, 2, 0, 60], strBytes(cid)));
+      };
+
+      ws.onmessage = function (ev) {
+        var d = new Uint8Array(ev.data);
+        var type = d[0] & 0xf0;
+        var pos = 1, mult = 1, len = 0, digital;
+        do { digital = d[pos++]; len += (digital & 127) * mult; mult *= 128; } while (digital & 128);
+
+        if (type === 0x20) {                      // CONNACK
+          connected = true;
+          backoff = 2000;
+          setStatus('已连接', 'ok');
+          send(0x82, [0, pid++].concat(strBytes(topic), [0]));   // SUBSCRIBE
+          if (pingTimer) clearInterval(pingTimer);
+          pingTimer = setInterval(function () { send(0xc0, []); }, 25000);
+        } else if (type === 0x30) {               // PUBLISH
+          var tl = (d[pos] << 8) | d[pos + 1];
+          var start = pos + 2;
+          var topicStr = new TextDecoder().decode(d.slice(start, start + tl));
+          if (topicStr === topic) {
+            try { render(JSON.parse(new TextDecoder().decode(d.slice(start + tl)))); } catch (e) {}
+          }
+        }
+      };
+
+      ws.onclose = function () { connected = false; setStatus('已断开，正在重连…', 'bad'); retry(); };
+      ws.onerror = function () { };
+    }
+
+    function retry() {
+      connected = false;
+      if (timer) clearTimeout(timer);
+      if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+      var wait = backoff + Math.random() * 1200;
+      if (backoff < 20000) backoff *= 2;
+      timer = setTimeout(connect, wait);
+    }
+
+    return {
+      start: function (code) {
+        topic = 'votelink/' + code + '/state';
+        connect();
+      },
+      publish: function (t, payload) {
+        if (!connected) return false;
+        return send(0x30, strBytes(t).concat(Array.from(new TextEncoder().encode(payload))));
+      },
+      isConnected: function () { return connected; }
+    };
+  })();
+
+  /* ---------- 启动 ---------- */
+  function startRelay(code) {
+    relayMode = true;
+    room = code;
+    localStorage.setItem(STORE_ROOM, code);
+    els.joinBox.classList.add('hidden');
+    els.foot.textContent = '房间 ' + code + ' · 点击选项投票';
+    setStatus('连接中继…');
+    mqtt.start(code);
+  }
+
+  function startLocal() {
+    relayMode = false;
+    setStatus('连接中…');
+    function poll() {
+      fetch('api/state', { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (s) { setStatus('已连接', 'ok'); render(s); })
+        .catch(function () {
+          setStatus('未连接', 'bad');
+          els.joinBox.classList.remove('hidden');
+          els.foot.textContent = '';
+        })
+        .then(function () { setTimeout(poll, 1500); });
+    }
+    poll();
+  }
+
+  els.joinBtn.addEventListener('click', function () {
+    var v = els.roomInput.value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{6}$/.test(v)) { say('请输入 6 位房间码', true); return; }
+    location.href = location.pathname + '?room=' + v;
+  });
+
+  if (relayMode) {
+    startRelay(room);
+  } else {
+    startLocal();
+  }
+})();
+</script>
+
+
+</body></html>
