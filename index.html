@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="zh-CN"><head>
+<html lang="zh-CN">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f1218">
 <meta name="format-detection" content="telephone=no">
-<title>VoteLink 投票</title>
+<title>VoteLink 课堂互动</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -18,7 +19,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 18px;
+    padding: 16px;
     -webkit-text-size-adjust: 100%;
   }
   .card {
@@ -27,28 +28,43 @@
     background: #171b24;
     border: 1px solid #232a38;
     border-radius: 20px;
-    padding: 24px;
+    padding: 22px;
     box-shadow: 0 24px 60px rgba(0,0,0,.45);
   }
-  .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
   .badge {
-    font-size: 12px; letter-spacing: .08em; color: #7fa5ff;
+    font-size: 12px; letter-spacing: .06em; color: #7fa5ff;
     background: rgba(79,140,255,.12); border: 1px solid rgba(79,140,255,.35);
     padding: 4px 10px; border-radius: 999px;
+    max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .status { font-size: 12px; color: #8a93a6; display: flex; align-items: center; gap: 6px; }
+  .status { font-size: 12px; color: #8a93a6; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: #8a93a6; }
   .dot.ok { background: #35d07f; box-shadow: 0 0 8px rgba(53,208,127,.7); }
   .dot.bad { background: #f05a5a; }
-  h1 { font-size: 21px; line-height: 1.45; margin: 0 0 8px; font-weight: 600; }
-  .sub { color: #8a93a6; font-size: 13px; margin-bottom: 18px; }
+
+  .phase {
+    display: inline-block; font-size: 12px; padding: 4px 12px; border-radius: 999px;
+    background: #232a38; color: #8a93a6; margin-bottom: 12px;
+  }
+  .phase.voting { background: rgba(79,140,255,.16); color: #7fa5ff; }
+  .phase.reveal { background: rgba(240,170,60,.16); color: #f0aa3c; }
+  .phase.ending { background: rgba(53,208,127,.16); color: #35d07f; }
+
+  .scene { color: #7d8799; font-size: 13px; letter-spacing: .04em; margin-bottom: 8px; }
+  .sceneImg {
+    width: 100%; max-height: 36vh; object-fit: contain; display: block;
+    border-radius: 14px; margin: 2px 0 14px; background: #0d1017;
+  }
+  h1 { font-size: 18px; line-height: 1.85; margin: 0 0 10px; font-weight: 400; white-space: pre-wrap; }
+  .sub { color: #8a93a6; font-size: 12px; margin-bottom: 16px; }
 
   .opt {
     position: relative;
     border: 1px solid #2a3345;
     background: #1b2130;
     border-radius: 14px;
-    padding: 16px;
+    padding: 15px 16px;
     margin-bottom: 10px;
     overflow: hidden;
     cursor: pointer;
@@ -63,16 +79,21 @@
     transition: width .45s cubic-bezier(.2,.8,.2,1);
   }
   .opt .row { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-  .opt .t { font-size: 16px; }
+  .opt .t { font-size: 15px; line-height: 1.5; }
   .opt .c { font-variant-numeric: tabular-nums; color: #9fb4d8; font-weight: 600; font-size: 13px; white-space: nowrap; }
-  .opt .track { position: relative; height: 5px; background: #10141c; border-radius: 3px; margin-top: 12px; overflow: hidden; }
+  .opt .track { position: relative; height: 5px; background: #10141c; border-radius: 3px; margin-top: 11px; overflow: hidden; }
   .opt .fill { height: 100%; width: 0; background: linear-gradient(90deg,#4f8cff,#6eb4ff); border-radius: 3px; transition: width .45s cubic-bezier(.2,.8,.2,1); }
 
-  .msg { color: #35d07f; font-size: 13px; margin-top: 12px; min-height: 18px; }
-  .msg.err { color: #f05a5a; }
-  .foot { color: #5c6577; font-size: 12px; margin-top: 18px; text-align: center; line-height: 1.6; }
+  #opts.locked .opt { cursor: default; }
+  #opts.locked .opt:active { transform: none; border-color: #2a3345; }
+  #opts.locked .opt.win { border-color: #f0be46; box-shadow: inset 0 0 0 1px rgba(240,190,70,.35); }
+  #opts.locked .opt.win .c { color: #f5cd5a; }
 
-  .join { margin-top: 20px; }
+  .msg { color: #35d07f; font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .msg.err { color: #f05a5a; }
+  .foot { color: #5c6577; font-size: 12px; margin-top: 16px; text-align: center; line-height: 1.6; }
+
+  .join { margin-top: 18px; }
   .join input {
     width: 100%; padding: 14px; font-size: 16px; letter-spacing: .18em; text-align: center;
     color: #e8ecf5; background: #12161f; border: 1px solid #2a3345; border-radius: 12px;
@@ -83,29 +104,31 @@
     width: 100%; margin-top: 10px; padding: 14px; font-size: 15px; font-weight: 600;
     color: #fff; background: #4f8cff; border: 0; border-radius: 12px; cursor: pointer;
   }
-  .join button:active { background: #3f7ae6; }
   .hidden { display: none; }
 </style>
 </head>
 <body>
 <div class="card">
   <div class="top">
-    <span class="badge">VOTELINK</span>
-    <span class="status"><span class="dot bad" id="dot"></span><span id="statusText">未连接</span></span>
+    <span class="badge" id="storyTitle">VOTELINK</span>
+    <span class="status"><span class="dot" id="dot"></span><span id="statusText">连接中…</span></span>
   </div>
 
-  <h1 id="q">正在连接投票…</h1>
+  <div class="phase" id="phase">连接中</div>
+  <div class="scene" id="sceneTitle"></div>
+  <img id="sceneImg" class="sceneImg hidden" alt="">
+  <h1 id="q">正在连接…</h1>
   <div class="sub" id="meta"></div>
 
   <div id="opts"></div>
   <div class="msg" id="msg"></div>
 
-  <div class="join" id="joinBox">
+  <div class="join hidden" id="joinBox">
     <input id="roomInput" maxlength="6" placeholder="输入 6 位房间码" autocomplete="off" autocapitalize="characters" spellcheck="false">
-    <button id="joinBtn">进入投票</button>
+    <button id="joinBtn">进入</button>
   </div>
 
-  <div class="foot" id="foot"></div>
+  <div class="foot" id="foot">课堂上跟着老师的节奏投票</div>
 </div>
 
 <script>
@@ -130,6 +153,7 @@
   var lastTotal = 0;
   var lastCounts = [];
   var lastSig = '';
+  var curPhase = '';
   var els = {
     q: document.getElementById('q'),
     meta: document.getElementById('meta'),
@@ -137,6 +161,10 @@
     msg: document.getElementById('msg'),
     dot: document.getElementById('dot'),
     statusText: document.getElementById('statusText'),
+    phase: document.getElementById('phase'),
+    sceneTitle: document.getElementById('sceneTitle'),
+    sceneImg: document.getElementById('sceneImg'),
+    storyTitle: document.getElementById('storyTitle'),
     joinBox: document.getElementById('joinBox'),
     roomInput: document.getElementById('roomInput'),
     joinBtn: document.getElementById('joinBtn'),
@@ -154,20 +182,44 @@
     els.msg.className = 'msg' + (isErr ? ' err' : '');
   }
 
+  function phaseLabel(phase) {
+    switch (phase) {
+      case 'voting': return '投票中';
+      case 'reveal': return '已揭晓';
+      case 'ending': return '剧终';
+      case 'story': return '讲解中';
+      default: return '连接中';
+    }
+  }
+
   function render(s) {
     if (!s || !s.options) return;
+    var phase = s.phase || 'voting';
     var total = s.total || 0;
-    els.q.textContent = s.question || '请选择一个选项';
-    els.meta.textContent = '总票数 ' + total + ' · 投票人数 ' + (s.voters || 0);
 
-    var sig = s.options.map(function (o) { return o.text; }).join('|');
+    els.storyTitle.textContent = s.title || 'VOTELINK';
+    els.sceneTitle.textContent = s.sceneTitle || '';
+    if (s.image) {
+      if (els.sceneImg.getAttribute('src') !== s.image) els.sceneImg.src = s.image;
+      els.sceneImg.classList.remove('hidden');
+    } else {
+      els.sceneImg.classList.add('hidden');
+      els.sceneImg.removeAttribute('src');
+    }
+    els.q.textContent = s.text || s.question || '';
+    els.phase.textContent = phaseLabel(phase);
+    els.phase.className = 'phase ' + phase;
+    els.meta.textContent = total > 0
+      ? ('已投 ' + total + ' 票 · ' + (s.voters || 0) + ' 人参与')
+      : '还没有人投票';
+
+    var sig = phase + '|' + (s.sceneId || '') + '|' + s.options.map(function (o) { return o.text; }).join('|');
     if (sig !== lastSig) {
       lastSig = sig;
       els.opts.innerHTML = '';
-      s.options.forEach(function (o) {
+      s.options.forEach(function (o, i) {
         var d = document.createElement('div');
         d.className = 'opt';
-        d.setAttribute('data-index', o.index);
 
         var bar = document.createElement('div'); bar.className = 'bar';
         var row = document.createElement('div'); row.className = 'row';
@@ -180,19 +232,19 @@
         track.appendChild(fill);
 
         d.appendChild(bar); d.appendChild(row); d.appendChild(track);
-        d.addEventListener('click', function () { vote(o.index); });
+        d.addEventListener('click', function () { vote(i); });
         els.opts.appendChild(d);
       });
     }
 
-    applyCounts(s.options, total);
-  }
+    curPhase = phase;
+    els.opts.className = (phase === 'voting') ? '' : 'locked';
 
-  function applyCounts(options, total) {
+    var winner = s.result ? s.result.winnerIndex : -1;
     var nodes = els.opts.children;
     lastCounts = [];
-    for (var i = 0; i < options.length; i++) {
-      var o = options[i];
+    for (var i = 0; i < s.options.length; i++) {
+      var o = s.options[i];
       lastCounts.push(o.count || 0);
       var el = nodes[i];
       if (!el) continue;
@@ -200,8 +252,20 @@
       el.querySelector('.bar').style.width = pct + '%';
       el.querySelector('.fill').style.width = pct + '%';
       el.querySelector('.c').textContent = o.count + ' 票 · ' + pct + '%';
+      if ((phase === 'reveal' || phase === 'ending') && i === winner) el.classList.add('win');
+      else el.classList.remove('win');
     }
     lastTotal = total;
+
+    if (phase === 'reveal' && winner >= 0 && s.options[winner]) {
+      say('多数选择了「' + s.options[winner].text + '」');
+    } else if (phase === 'ending') {
+      say('— 剧终 —');
+    } else if (phase === 'story') {
+      say('老师正在讲解，稍后开放投票');
+    } else if (phase === 'voting') {
+      say('');
+    }
   }
 
   function optimistic(index) {
@@ -217,19 +281,20 @@
     }
     if (lastCounts[index] !== undefined) lastCounts[index]++;
     lastTotal = total;
-    els.meta.textContent = '总票数 ' + total + ' · 投票人数 —';
   }
 
   /* ---------- 投票 ---------- */
   function vote(index) {
-    if (!els.opts.children.length) { say('还没有连上投票，请稍候', true); return; }
+    if (curPhase !== 'voting') {
+      if (curPhase === 'reveal' || curPhase === 'ending') say('投票已结束', true);
+      return;
+    }
     optimistic(index);
-    say('正在提交…');
 
     if (relayMode) {
       var ok = mqtt.publish('votelink/' + room + '/vote',
         JSON.stringify({ option: index, name: deviceId }));
-      say(ok ? '已提交' : '提交失败：连接已断开', !ok);
+      say(ok ? '已提交，可再次点击改票' : '提交失败：连接已断开', !ok);
     } else {
       fetch('api/vote', {
         method: 'POST',
@@ -237,8 +302,8 @@
         body: JSON.stringify({ option: index, name: deviceId })
       }).then(function (r) { return r.json(); })
         .then(function (j) {
-          if (j.ok) { say(j.message || '已提交'); if (j.state) render(j.state); }
-          else say('提交失败：' + (j.error || ''), true);
+          if (j.ok) { say('已提交，可再次点击改票'); if (j.state) render(j.state); }
+          else say(j.error || '提交失败', true);
         })
         .catch(function () { say('提交失败，请检查网络', true); });
     }
@@ -282,14 +347,14 @@
         var pos = 1, mult = 1, len = 0, digital;
         do { digital = d[pos++]; len += (digital & 127) * mult; mult *= 128; } while (digital & 128);
 
-        if (type === 0x20) {                      // CONNACK
+        if (type === 0x20) {
           connected = true;
           backoff = 2000;
           setStatus('已连接', 'ok');
-          send(0x82, [0, pid++].concat(strBytes(topic), [0]));   // SUBSCRIBE
+          send(0x82, [0, pid++].concat(strBytes(topic), [0]));
           if (pingTimer) clearInterval(pingTimer);
           pingTimer = setInterval(function () { send(0xc0, []); }, 25000);
-        } else if (type === 0x30) {               // PUBLISH
+        } else if (type === 0x30) {
           var tl = (d[pos] << 8) | d[pos + 1];
           var start = pos + 2;
           var topicStr = new TextDecoder().decode(d.slice(start, start + tl));
@@ -331,7 +396,6 @@
     room = code;
     localStorage.setItem(STORE_ROOM, code);
     els.joinBox.classList.add('hidden');
-    els.foot.textContent = '房间 ' + code + ' · 点击选项投票';
     setStatus('连接中继…');
     mqtt.start(code);
   }
@@ -353,6 +417,10 @@
     poll();
   }
 
+  els.sceneImg.addEventListener('error', function () {
+    this.classList.add('hidden');
+  });
+
   els.joinBtn.addEventListener('click', function () {
     var v = els.roomInput.value.trim().toUpperCase();
     if (!/^[A-Z0-9]{6}$/.test(v)) { say('请输入 6 位房间码', true); return; }
@@ -366,6 +434,5 @@
   }
 })();
 </script>
-
-
-</body></html>
+</body>
+</html>
