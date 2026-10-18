@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f1218">
 <meta name="format-detection" content="telephone=no">
-<title>VoteLink 课堂互动</title>
+<title>By Lee</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -110,7 +110,7 @@
 <body>
 <div class="card">
   <div class="top">
-    <span class="badge" id="storyTitle">VOTELINK</span>
+    <span class="badge" id="storyTitle">By Lee</span>
     <span class="status"><span class="dot" id="dot"></span><span id="statusText">连接中…</span></span>
   </div>
 
@@ -197,7 +197,7 @@
     var phase = s.phase || 'voting';
     var total = s.total || 0;
 
-    els.storyTitle.textContent = s.title || 'VOTELINK';
+    els.storyTitle.textContent = s.title || 'By Lee';
     els.sceneTitle.textContent = s.sceneTitle || '';
     if (s.image) {
       if (els.sceneImg.getAttribute('src') !== s.image) els.sceneImg.src = s.image;
@@ -206,7 +206,7 @@
       els.sceneImg.classList.add('hidden');
       els.sceneImg.removeAttribute('src');
     }
-    els.q.textContent = s.text || s.question || '';
+    els.q.textContent = s.text || s.question || '请看大屏幕，在手机上选择';
     els.phase.textContent = phaseLabel(phase);
     els.phase.className = 'phase ' + phase;
     els.meta.textContent = total > 0
